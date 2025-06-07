@@ -1,74 +1,72 @@
-import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { ref, onValue } from 'firebase/database';
-import { Table, Button, Modal, Form, Input, message } from 'antd';
-import 'antd/dist/antd.css';
+import React, { useEffect, useState } from 'react';
+import { Table, Button, Form, Input, message } from 'antd';
+import { ref, onValue, push, set } from 'firebase/database';
+import { database } from '../firebase';
 
-const { TextArea } = Input;
-
-function Students() {
+const Students = () => {
   const [students, setStudents] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [visible, setVisible] = useState(false);
   const [form] = Form.useForm();
 
   useEffect(() => {
-    fetchStudents();
+    const studentsRef = ref(database, 'students');
+    onValue(studentsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const list = Object.entries(data).map(([key, val]) => ({
+          student_id: key,
+          name: val.name,
+        }));
+        setStudents(list);
+      }
+    });
   }, []);
 
-  const fetchStudents = () => {
-    setLoading(true);
+  const onFinish = async (values) => {
     try {
-      const studentsRef = ref(db, 'students');
-      onValue(studentsRef, (snapshot) => {
-        const data = snapshot.val();
-        const studentsList = [];
-        
-        if (data) {
-          Object.keys(data).forEach(studentId => {
-            studentsList.push({
-              key: studentId,
-              id: studentId,
-              name: data[studentId].name,
-              registeredAt: new Date(data[studentId].registered_at).toLocaleString()
-            });
-          });
-          setStudents(studentsList);
-        }
+      const res = await fetch('http://<YOUR-RPI-IP>:5000/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
       });
-    } catch (error) {
-      message.error('Failed to fetch students');
-      console.error(error);
-    } finally {
-      setLoading(false);
+
+      if (res.ok) {
+        message.success('Student registered! Proceed with fingerprint and face scan.');
+        form.resetFields();
+      } else {
+        message.error('Failed to register student.');
+      }
+    } catch (err) {
+      console.error(err);
+      message.error('Could not connect to backend.');
     }
   };
 
   const columns = [
-    { title: 'ID', dataIndex: 'id', key: 'id' },
-    { title: 'Name', dataIndex: 'name', key: 'name' },
-    { title: 'Registered At', dataIndex: 'registeredAt', key: 'registeredAt' },
+    { title: 'Student ID', dataIndex: 'student_id', key: 'student_id' },
+    { title: 'Full Name', dataIndex: 'name', key: 'name' },
   ];
 
   return (
-    <div className="students-container">
-      <h1>Student Management</h1>
-      <div className="controls">
-        <Button type="primary" onClick={() => setVisible(true)}>
-          Add Student
-        </Button>
-        <Button onClick={fetchStudents} loading={loading}>
-          Refresh
-        </Button>
-      </div>
-      <Table
-        columns={columns}
-        dataSource={students}
-        loading={loading}
-        pagination={{ pageSize: 10 }}
-      />
+    <div>
+      <h2>Registered Students</h2>
+      <Table dataSource={students} columns={columns} rowKey="student_id" />
+
+      <h2 style={{ marginTop: 40 }}>Add New Student</h2>
+      <Form form={form} layout="vertical" onFinish={onFinish}>
+        <Form.Item name="student_id" label="Student ID" rules={[{ required: true }]}>
+          <Input />
+        </Form.Item>
+        <Form.Item name="name" label="Full Name" rules={[{ required: true }]}>
+          <Input />
+        </Form.Item>
+        <Form.Item>
+          <Button type="primary" htmlType="submit">
+            Begin Biometric Enrollment
+          </Button>
+        </Form.Item>
+      </Form>
     </div>
   );
-}
+};
 
 export default Students;

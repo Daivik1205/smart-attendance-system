@@ -1,54 +1,46 @@
+# backend/firebase_handler.py
+
 import firebase_admin
 from firebase_admin import credentials, db
-from datetime import datetime
-import time
+import datetime
+import json
 
-class FirebaseHandler:
-    def __init__(self):
-        cred = credentials.Certificate(FIREBASE_CRED_PATH)
-        firebase_admin.initialize_app(cred, {'databaseURL': FIREBASE_DB_URL})
-        self.db_ref = db.reference('/')
-        
-    def add_student(self, student_id, name, fingerprint_data=None, face_data=None):
-        student_ref = self.db_ref.child('students').child(student_id)
-        student_ref.set({
-            'name': name,
-            'fingerprint_data': fingerprint_data,
-            'face_data': face_data,
-            'registered_at': datetime.now().isoformat()
-        })
-        
-    def log_attendance(self, student_id, status="present"):
-        today = datetime.now().strftime('%Y-%m-%d')
-        student_ref = self.db_ref.child('students').child(student_id)
-        student_data = student_ref.get()
-        
-        if student_data:
-            # Check if already logged today
-            today_log = self.db_ref.child('attendance').child(today).child(student_id).get()
-            if today_log:
-                return False  # Already logged today
-            
-            log_ref = self.db_ref.child('attendance').child(today).child(student_id)
-            log_ref.set({
-                'name': student_data['name'],
-                'timestamp': datetime.now().isoformat(),
-                'status': status
-            })
-            return True
-        return False
-    
-    def get_student(self, student_id):
-        return self.db_ref.child('students').child(student_id).get()
-    
-    def get_today_attendance(self):
-        today = datetime.now().strftime('%Y-%m-%d')
-        return self.db_ref.child('attendance').child(today).get()
-    
-    def get_student_by_fingerprint(self, position):
-        students = self.db_ref.child('students').get()
-        if students:
-            for student_id, data in students.items():
-                if data.get('fingerprint_data', {}).get('position') == position:
-                    return student_id
-        return None
+# --- Initialize Firebase App (do this once globally) ---
+def init_firebase():
+    cred = credentials.Certificate('smart_attendance.json')
+    firebase_admin.initialize_app(cred, {
+        'databaseURL': 'https://smart-attendance-rv-default-rtdb.firebaseio.com'
+    })
+
+# --- Add new student data ---
+def add_student(student_id, name, fingerprint_id, face_encoding):
+    ref = db.reference(f'students/{student_id}')
+    ref.set({
+        'name': name,
+        'fingerprint_id': fingerprint_id,
+        'face_encoding': face_encoding
+    })
+    print(f"Student {student_id} registered")
+
+# --- Mark attendance ---
+def mark_attendance(student_id):
+    now = datetime.datetime.now()
+    date = now.strftime('%Y-%m-%d')
+    time_str = now.strftime('%H:%M')
+
+    ref = db.reference(f'attendance/{student_id}/{date}')
+    ref.set({
+        'time': time_str,
+        'status': 'Present'
+    })
+    print(f"Marked attendance for {student_id} at {time_str}")
+
+# --- Fetch all students (for dashboard) ---
+def get_all_students():
+    ref = db.reference('students')
+    return ref.get()
+
+# --- Fetch attendance for a student ---
+def get_attendance(student_id):
+    ref = db.reference(f'attendance/{student_id}')
+    return ref.get()

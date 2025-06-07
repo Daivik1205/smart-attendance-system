@@ -1,97 +1,137 @@
+// components/Attendance.js
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
+import { database } from '../firebase'; 
 import { ref, onValue } from 'firebase/database';
-import { Table, Button, DatePicker, message } from 'antd';
-import moment from 'moment';
-import 'antd/dist/antd.css';
+import { Table, Card, DatePicker, Tag, Typography, Space, Spin } from 'antd';
+import dayjs from 'dayjs';
+import isBetween from 'dayjs/plugin/isBetween';
+import { CalendarOutlined } from '@ant-design/icons';
 
+dayjs.extend(isBetween);
+
+const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
 function Attendance() {
   const [attendance, setAttendance] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [dateRange, setDateRange] = useState([
-    moment().startOf('day'),
-    moment().endOf('day')
-  ]);
+  const [loading, setLoading] = useState(true);
+  const [dates, setDates] = useState([dayjs().subtract(7, 'day'), dayjs()]);
 
   useEffect(() => {
-    fetchAttendance();
-  }, [dateRange]);
-
-  const fetchAttendance = async () => {
     setLoading(true);
-    try {
-      const [startDate, endDate] = dateRange;
-      const dates = [];
-      let current = startDate.clone();
-      while (current.isSameOrBefore(endDate)) {
-        dates.push(current.format('YYYY-MM-DD'));
-        current.add(1, 'day');
+    const attendanceRef = ref(database, 'attendance');
+    const unsubscribe = onValue(attendanceRef, (snapshot) => {
+      const data = snapshot.val();
+      if (!data) {
+        setAttendance([]);
+        setLoading(false);
+        return;
       }
       
-      const attendanceData = [];
-      for (const date of dates) {
-        const attendanceRef = ref(db, `attendance/${date}`);
-        onValue(attendanceRef, (snapshot) => {
-          const data = snapshot.val();
-          if (data) {
-            Object.keys(data).forEach(studentId => {
-              attendanceData.push({
-                key: `${date}-${studentId}`,
-                date,
-                name: data[studentId].name,
-                time: moment(data[studentId].timestamp).format('HH:mm:ss'),
-                status: data[studentId].status
-              });
+      const allRecords = [];
+      Object.keys(data).forEach((date) => {
+        const dateData = data[date];
+        Object.keys(dateData).forEach((studentId) => {
+          const studentData = dateData[studentId];
+          const recordTimestamp = studentData.timestamp || '';
+          const recordDate = dayjs(date);
+
+          if (recordDate.isBetween(dates[0], dates[1], null, '[]')) {
+            allRecords.push({
+              key: `${date}-${studentId}`,
+              date: dayjs(date).format('DD MMM YYYY'),
+              studentId,
+              name: studentData.name || 'N/A',
+              status: studentData.status === 'present' ? 'Present' : 'Absent',
+              time: recordTimestamp ? dayjs(recordTimestamp).format('HH:mm:ss') : 'N/A',
             });
-            setAttendance([...attendanceData]);
           }
         });
-      }
-    } catch (error) {
-      message.error('Failed to fetch attendance data');
-      console.error(error);
-    } finally {
+      });
+
+      setAttendance(allRecords);
       setLoading(false);
-    }
-  };
+    });
+
+    return () => unsubscribe();
+  }, [dates]);
 
   const columns = [
-    { title: 'Date', dataIndex: 'date', key: 'date' },
-    { title: 'Name', dataIndex: 'name', key: 'name' },
-    { title: 'Time', dataIndex: 'time', key: 'time' },
-    { 
-      title: 'Status', 
-      dataIndex: 'status', 
+    {
+      title: 'Date',
+      dataIndex: 'date',
+      key: 'date',
+      sorter: (a, b) => dayjs(a.date).unix() - dayjs(b.date).unix(),
+    },
+    {
+      title: 'Student ID',
+      dataIndex: 'studentId',
+      key: 'studentId',
+    },
+    {
+      title: 'Name',
+      dataIndex: 'name',
+      key: 'name',
+    },
+    {
+      title: 'Time',
+      dataIndex: 'time',
+      key: 'time',
+    },
+    {
+      title: 'Status',
+      dataIndex: 'status',
       key: 'status',
-      render: status => (
-        <span style={{ color: status === 'present' ? 'green' : 'red' }}>
-          {status.toUpperCase()}
-        </span>
-      )
+      filters: [
+        { text: 'Present', value: 'Present' },
+        { text: 'Absent', value: 'Absent' },
+      ],
+      onFilter: (value, record) => record.status === value,
+      render: (text) => (
+        <Tag color={text === 'Present' ? 'green' : 'red'}>
+          {text}
+        </Tag>
+      ),
     },
   ];
 
   return (
-    <div className="attendance-container">
-      <h1>Attendance Records</h1>
-      <div className="controls">
-        <RangePicker
-          value={dateRange}
-          onChange={setDateRange}
-          disabledDate={current => current && current > moment().endOf('day')}
-        />
-        <Button type="primary" onClick={fetchAttendance} loading={loading}>
-          Refresh
-        </Button>
-      </div>
-      <Table
-        columns={columns}
-        dataSource={attendance}
-        loading={loading}
-        pagination={{ pageSize: 10 }}
-      />
+    <div style={{ padding: '1rem' }}>
+      <Card
+        title={
+          <Space>
+            <CalendarOutlined />
+            <Text strong>Attendance Records</Text>
+          </Space>
+        }
+        extra={
+          <RangePicker
+            value={dates}
+            onChange={setDates}
+            disabledDate={current => current && current > dayjs().endOf('day')}
+            style={{ width: 250 }}
+            allowClear={false}
+          />
+        }
+        bordered={false}
+        style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.09)' }}
+      >
+        <Spin spinning={loading}>
+          <Table
+            columns={columns}
+            dataSource={attendance}
+            rowKey="key"
+            pagination={{ 
+              pageSize: 10,
+              showSizeChanger: true,
+              showTotal: (total) => `Total ${total} records`,
+            }}
+            locale={{
+              emptyText: 'No attendance records found for the selected period'
+            }}
+          />
+        </Spin>
+      </Card>
     </div>
   );
 }

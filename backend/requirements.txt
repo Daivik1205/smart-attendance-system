@@ -1,17 +1,23 @@
-# Python dependencies
-firebase-admin==6.1.0
+# Hardware control
 RPi.GPIO==0.7.0
-pyfingerprint==0.5
-face-recognition==1.3.0
-opencv-python==4.5.5.64
-numpy==1.22.4
-smbus2==0.4.1
-python-dotenv==0.21.0
-pickle5==0.0.12
 
-# For React frontend (package.json will handle these)
-# react==17.0.2
-# react-dom==17.0.2
-# firebase==9.9.0
-# antd==4.21.0
-# react-router-dom==5.3.0
+# LCD display via I2C
+adafruit-circuitpython-charlcd==3.3.0
+adafruit-circuitpython-busdevice==5.3.1
+
+# Face recognition dependencies
+opencv-python-headless==4.7.0.72
+face_recognition==1.3.0
+dlib==19.24.1
+
+# Firebase admin SDK
+firebase-admin==6.0.1
+
+# PyFingerprint for R307 sensor (may need manual install if not on PyPI)
+pyfingerprint==1.3.0
+
+# I2C communication
+adafruit-blinka==9.13.2
+
+# numpy (required by face_recognition and dlib)
+numpy==1.24.4

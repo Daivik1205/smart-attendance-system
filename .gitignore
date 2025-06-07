@@ -10,7 +10,7 @@ node_modules/
 npm-debug.log*
 
 # Firebase
-serviceAccountKey.json
+smart_attendance.json
 
 # Face data
 faces.dat

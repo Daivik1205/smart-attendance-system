@@ -27,7 +27,8 @@ sudo chmod a+rw /dev/serial0
 # Start the backend server
 echo "Starting backend server..."
 cd /home/pi/smart_attendance_system/backend
-python3 main.py &
+source venv/bin/activate
+python3 main.py
 
 # Start the frontend server
 echo "Starting frontend server..."

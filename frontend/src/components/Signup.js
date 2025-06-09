@@ -5,7 +5,7 @@ import { ref, set } from 'firebase/database';
 import { auth, database } from '../firebase';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Select, Typography, Card, message } from 'antd';
-import { MailOutlined, LockOutlined, IdcardOutlined } from '@ant-design/icons';
+import { MailOutlined, LockOutlined, IdcardOutlined, UserOutlined } from '@ant-design/icons';
 
 const { Title, Text, Link } = Typography;
 const { Option } = Select;
@@ -16,14 +16,45 @@ export default function Signup() {
   const [role, setRole] = useState('student');
   const navigate = useNavigate();
 
+  const sendEnrollmentRequest = async (studentId, name) => {
+    try {
+      const response = await fetch('http://<YOUR_RPI_IP>:5000/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          student_id: studentId,
+          name: name
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send enrollment request');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Enrollment request error:', error);
+      throw error;
+    }
+  };
+
   const onFinish = async (values) => {
     setLoading(true);
     try {
-      // Validate student ID if role is student
-      if (values.role === 'student' && !values.studentId) {
-        message.error('Please enter your student ID');
-        setLoading(false);
-        return;
+      // Validate student ID and name if role is student
+      if (values.role === 'student') {
+        if (!values.studentId) {
+          message.error('Please enter your student ID');
+          setLoading(false);
+          return;
+        }
+        if (!values.name) {
+          message.error('Please enter your name');
+          setLoading(false);
+          return;
+        }
       }
 
       // Create user with email and password
@@ -39,20 +70,28 @@ export default function Signup() {
         email: values.email,
         role: values.role,
         studentId: values.role === 'student' ? values.studentId : null,
+        name: values.role === 'student' ? values.name : null,
         createdAt: new Date().toISOString()
       });
 
-      // Show success message and redirect
-      message.success('Account created successfully!');
-      navigate('/login'); // Immediate redirect after success
+      // If student, send enrollment request to backend
+      if (values.role === 'student') {
+        await sendEnrollmentRequest(values.studentId, values.name);
+        message.success('Account created successfully! Please complete biometric enrollment at the device.');
+      } else {
+        message.success('Account created successfully!');
+      }
+
+      navigate('/login');
       
     } catch (error) {
-      // Handle specific error cases
       let errorMessage = 'Signup failed. Please try again.';
       if (error.code === 'auth/email-already-in-use') {
         errorMessage = 'Email already in use. Try logging in instead.';
       } else if (error.code === 'auth/weak-password') {
         errorMessage = 'Password should be at least 6 characters.';
+      } else if (error.message.includes('enrollment request')) {
+        errorMessage = 'Account created but enrollment request failed. Please contact support.';
       }
       message.error(errorMessage);
     } finally {
@@ -158,17 +197,31 @@ export default function Signup() {
           </Form.Item>
 
           {role === 'student' && (
-            <Form.Item
-              name="studentId"
-              label="Student ID"
-              rules={[{ required: true, message: 'Please input your student ID!' }]}
-            >
-              <Input 
-                prefix={<IdcardOutlined />} 
-                placeholder="Enter your student ID" 
-                size="large"
-              />
-            </Form.Item>
+            <>
+              <Form.Item
+                name="name"
+                label="Full Name"
+                rules={[{ required: true, message: 'Please input your full name!' }]}
+              >
+                <Input 
+                  prefix={<UserOutlined />} 
+                  placeholder="Enter your full name" 
+                  size="large"
+                />
+              </Form.Item>
+
+              <Form.Item
+                name="studentId"
+                label="Student ID"
+                rules={[{ required: true, message: 'Please input your student ID!' }]}
+              >
+                <Input 
+                  prefix={<IdcardOutlined />} 
+                  placeholder="Enter your student ID" 
+                  size="large"
+                />
+              </Form.Item>
+            </>
           )}
 
           <Form.Item>
